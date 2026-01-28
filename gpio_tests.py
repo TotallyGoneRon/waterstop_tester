@@ -403,7 +403,10 @@ class GPIOTester:
             return TestOutput(test_name, TestResult.FAIL, f"Valve state test failed: {e}")
 
     def test_feedback_pins(self) -> TestOutput:
-        """Read and report feedback pin states (legacy, used in quick test)."""
+        """Read and report feedback pin states (used in quick test).
+
+        Fails if both pins are LOW for any valve (error condition).
+        """
         test_name = "Feedback Pins"
         try:
             self._emit_status(test_name, TestResult.RUNNING, "Reading feedback pins...")
@@ -422,10 +425,27 @@ class GPIOTester:
 
             details = " | ".join([f"{k}: {v}" for k, v in states.items()])
 
+            # Check for error condition: both pins LOW on same valve
+            cold_both_low = cold_open == 0 and cold_close == 0
+            hot_both_low = hot_open == 0 and hot_close == 0
+
+            if cold_both_low or hot_both_low:
+                errors = []
+                if cold_both_low:
+                    errors.append("Cold: both pins LOW")
+                if hot_both_low:
+                    errors.append("Hot: both pins LOW")
+                return TestOutput(
+                    test_name,
+                    TestResult.FAIL,
+                    f"ERROR: {'; '.join(errors)}",
+                    details
+                )
+
             return TestOutput(
                 test_name,
                 TestResult.PASS,
-                "Feedback pins readable",
+                "Feedback pins OK",
                 details
             )
 
@@ -559,11 +579,12 @@ class GPIOTester:
         except Exception as e:
             return TestOutput(test_name, TestResult.FAIL, f"Motor B test failed: {e}")
 
-    def _cycle_valve(self, motor: str, timeout: float = 10.0) -> Tuple[bool, str]:
+    def _cycle_valve(self, motor: str, test_name: str, timeout: float = 10.0) -> Tuple[bool, str]:
         """Fully cycle a valve open then closed.
 
         Args:
             motor: 'A' (cold) or 'B' (hot)
+            test_name: Name of the test for status updates
             timeout: Max time per direction in seconds
 
         Returns:
@@ -582,20 +603,27 @@ class GPIOTester:
 
         try:
             # Enable motor driver
+            self._emit_status(test_name, TestResult.RUNNING, f"{name}: Enabling motor driver...")
             self.gpio.output(Pins.STBY, self.gpio.HIGH)
 
             # Setup PWM
             pwm = self.gpio.PWM(pwm_pin, 1000)
 
             # Open valve
+            self._emit_status(test_name, TestResult.RUNNING, f"{name}: Opening valve...")
             self.gpio.output(in1, self.gpio.HIGH)
             self.gpio.output(in2, self.gpio.LOW)
             pwm.start(100)
 
             start = time.time()
+            last_update = 0
             while time.time() - start < timeout:
                 if self.gpio.input(fb_open) == 0:  # Active low
                     break
+                elapsed = int(time.time() - start)
+                if elapsed > last_update:
+                    last_update = elapsed
+                    self._emit_status(test_name, TestResult.RUNNING, f"{name}: Opening... {elapsed}s")
                 time.sleep(0.05)
 
             open_reached = self.gpio.input(fb_open) == 0
@@ -604,22 +632,34 @@ class GPIOTester:
             pwm.stop()
             self.gpio.output(in1, self.gpio.LOW)
             self.gpio.output(in2, self.gpio.LOW)
+
+            if open_reached:
+                self._emit_status(test_name, TestResult.RUNNING, f"{name}: Opened OK, pausing...")
+            else:
+                self._emit_status(test_name, TestResult.RUNNING, f"{name}: Open TIMEOUT, trying close...")
             time.sleep(0.3)
 
             # Close valve
+            self._emit_status(test_name, TestResult.RUNNING, f"{name}: Closing valve...")
             self.gpio.output(in1, self.gpio.LOW)
             self.gpio.output(in2, self.gpio.HIGH)
             pwm.start(100)
 
             start = time.time()
+            last_update = 0
             while time.time() - start < timeout:
                 if self.gpio.input(fb_close) == 0:  # Active low
                     break
+                elapsed = int(time.time() - start)
+                if elapsed > last_update:
+                    last_update = elapsed
+                    self._emit_status(test_name, TestResult.RUNNING, f"{name}: Closing... {elapsed}s")
                 time.sleep(0.05)
 
             close_reached = self.gpio.input(fb_close) == 0
 
             # Stop
+            self._emit_status(test_name, TestResult.RUNNING, f"{name}: Stopping motor...")
             pwm.stop()
             self.gpio.output(in1, self.gpio.LOW)
             self.gpio.output(in2, self.gpio.LOW)
@@ -646,9 +686,9 @@ class GPIOTester:
         """Full cycle test for cold valve."""
         test_name = "Cold Valve Cycle"
         try:
-            self._emit_status(test_name, TestResult.RUNNING, "Cycling cold valve...")
+            self._emit_status(test_name, TestResult.RUNNING, "Starting cold valve cycle...")
 
-            success, msg = self._cycle_valve('A')
+            success, msg = self._cycle_valve('A', test_name)
 
             if success:
                 return TestOutput(test_name, TestResult.PASS, msg)
@@ -662,9 +702,9 @@ class GPIOTester:
         """Full cycle test for hot valve."""
         test_name = "Hot Valve Cycle"
         try:
-            self._emit_status(test_name, TestResult.RUNNING, "Cycling hot valve...")
+            self._emit_status(test_name, TestResult.RUNNING, "Starting hot valve cycle...")
 
-            success, msg = self._cycle_valve('B')
+            success, msg = self._cycle_valve('B', test_name)
 
             if success:
                 return TestOutput(test_name, TestResult.PASS, msg)

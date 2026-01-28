@@ -277,10 +277,15 @@
                         status === 'pass' ? '●' :
                         status === 'fail' ? '●' :
                         status === 'running' ? '◐' : '○';
-                    item.querySelector('.result-status').textContent =
-                        status === 'pass' ? 'PASS' :
-                        status === 'fail' ? 'FAIL' :
-                        status === 'running' ? 'TESTING...' : 'WAITING';
+                    // Show progress message when running, otherwise show status
+                    if (status === 'running' && message) {
+                        item.querySelector('.result-status').textContent = message;
+                    } else {
+                        item.querySelector('.result-status').textContent =
+                            status === 'pass' ? 'PASS' :
+                            status === 'fail' ? 'FAIL' :
+                            status === 'running' ? 'TESTING...' : 'WAITING';
+                    }
 
                     // Update or add details
                     let detailEl = item.querySelector('.result-details');
