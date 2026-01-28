@@ -296,8 +296,114 @@ class GPIOTester:
         except Exception as e:
             return TestOutput(test_name, TestResult.FAIL, f"PWM B test failed: {e}")
 
+    def test_pullup_resistors(self) -> TestOutput:
+        """Test pull-up resistors (no valves connected).
+
+        All feedback pins should read HIGH when no valves are connected.
+        """
+        test_name = "Pull-up Resistors"
+        try:
+            self._emit_status(test_name, TestResult.RUNNING, "Checking pull-up resistors...")
+
+            cold_open = self.gpio.input(Pins.COLD_FB_OPEN)
+            cold_close = self.gpio.input(Pins.COLD_FB_CLOSE)
+            hot_open = self.gpio.input(Pins.HOT_FB_OPEN)
+            hot_close = self.gpio.input(Pins.HOT_FB_CLOSE)
+
+            pins_state = {
+                'Cold Open': cold_open,
+                'Cold Close': cold_close,
+                'Hot Open': hot_open,
+                'Hot Close': hot_close
+            }
+
+            all_high = all(v == 1 for v in pins_state.values())
+            details = " | ".join([f"{k}: {'HIGH' if v == 1 else 'LOW'}" for k, v in pins_state.items()])
+
+            if all_high:
+                return TestOutput(
+                    test_name,
+                    TestResult.PASS,
+                    "All pull-ups working (all pins HIGH)",
+                    details
+                )
+            else:
+                low_pins = [k for k, v in pins_state.items() if v == 0]
+                return TestOutput(
+                    test_name,
+                    TestResult.FAIL,
+                    f"Unexpected LOW: {', '.join(low_pins)}",
+                    details
+                )
+
+        except Exception as e:
+            return TestOutput(test_name, TestResult.FAIL, f"Pull-up test failed: {e}")
+
+    def test_valve_state(self) -> TestOutput:
+        """Check valve positions without actuation.
+
+        Reports whether each valve is detected and its position (open/closed).
+        """
+        test_name = "Valve State"
+        try:
+            self._emit_status(test_name, TestResult.RUNNING, "Checking valve states...")
+
+            cold_open = self.gpio.input(Pins.COLD_FB_OPEN)
+            cold_close = self.gpio.input(Pins.COLD_FB_CLOSE)
+            hot_open = self.gpio.input(Pins.HOT_FB_OPEN)
+            hot_close = self.gpio.input(Pins.HOT_FB_CLOSE)
+
+            # Determine cold valve state
+            if cold_open == 0 and cold_close == 1:
+                cold_state = "OPEN"
+            elif cold_open == 1 and cold_close == 0:
+                cold_state = "CLOSED"
+            elif cold_open == 1 and cold_close == 1:
+                cold_state = "NOT CONNECTED"
+            else:
+                cold_state = "ERROR (both active)"
+
+            # Determine hot valve state
+            if hot_open == 0 and hot_close == 1:
+                hot_state = "OPEN"
+            elif hot_open == 1 and hot_close == 0:
+                hot_state = "CLOSED"
+            elif hot_open == 1 and hot_close == 1:
+                hot_state = "NOT CONNECTED"
+            else:
+                hot_state = "ERROR (both active)"
+
+            details = f"Cold: {cold_state} | Hot: {hot_state}"
+
+            # Pass if both valves detected, fail otherwise
+            cold_ok = cold_state in ["OPEN", "CLOSED"]
+            hot_ok = hot_state in ["OPEN", "CLOSED"]
+
+            if cold_ok and hot_ok:
+                return TestOutput(
+                    test_name,
+                    TestResult.PASS,
+                    "Both valves detected",
+                    details
+                )
+            else:
+                issues = []
+                if not cold_ok:
+                    issues.append(f"Cold: {cold_state}")
+                if not hot_ok:
+                    issues.append(f"Hot: {hot_state}")
+                return TestOutput(
+                    test_name,
+                    TestResult.FAIL,
+                    "; ".join(issues),
+                    details
+                )
+
+        except Exception as e:
+            return TestOutput(test_name, TestResult.FAIL, f"Valve state test failed: {e}")
+
     def test_feedback_pins(self) -> TestOutput:
-        """Read and report feedback pin states."""
+        """Read and report feedback pin states (legacy, used in quick test)."""
         test_name = "Feedback Pins"
         try:
             self._emit_status(test_name, TestResult.RUNNING, "Reading feedback pins...")
@@ -308,10 +414,10 @@ class GPIOTester:
             hot_close = self.gpio.input(Pins.HOT_FB_CLOSE)
 
             states = {
-                'Cold Open': 'ACTIVE' if cold_open == 0 else 'inactive',
-                'Cold Close': 'ACTIVE' if cold_close == 0 else 'inactive',
-                'Hot Open': 'ACTIVE' if hot_open == 0 else 'inactive',
-                'Hot Close': 'ACTIVE' if hot_close == 0 else 'inactive'
+                'Cold Open': 'LOW' if cold_open == 0 else 'HIGH',
+                'Cold Close': 'LOW' if cold_close == 0 else 'HIGH',
+                'Hot Open': 'LOW' if hot_open == 0 else 'HIGH',
+                'Hot Close': 'LOW' if hot_close == 0 else 'HIGH'
             }
 
             details = " | ".join([f"{k}: {v}" for k, v in states.items()])
@@ -579,7 +685,6 @@ class GPIOTester:
             self.test_motor_b_direction,
             self.test_pwm_a,
             self.test_pwm_b,
-            self.test_feedback_pins,
         ]
 
         for test in tests:
@@ -588,16 +693,40 @@ class GPIOTester:
             self._emit_status(result.name, result.result, result.message, result.details)
             time.sleep(0.1)
 
+        # Feedback pins - just report state
+        result = self.test_feedback_pins()
+        results.append(result)
+        self._emit_status(result.name, result.result, result.message, result.details)
+
         return results
 
     def run_full_test(self) -> List[TestOutput]:
         """Run full tests (valves + fan connected)."""
         results = []
 
-        # Start with quick tests
-        results.extend(self.run_quick_test())
+        # Basic GPIO tests (same as quick, but without feedback)
+        basic_tests = [
+            self.test_led,
+            self.test_stby_pin,
+            self.test_motor_a_direction,
+            self.test_motor_b_direction,
+            self.test_pwm_a,
+            self.test_pwm_b,
+        ]
 
-        # Add full tests
+        for test in basic_tests:
+            result = test()
+            results.append(result)
+            self._emit_status(result.name, result.result, result.message, result.details)
+            time.sleep(0.1)
+
+        # Valve state check (expects valves connected)
+        result = self.test_valve_state()
+        results.append(result)
+        self._emit_status(result.name, result.result, result.message, result.details)
+        time.sleep(0.1)
+
+        # Full tests with valve actuation
         full_tests = [
             self.test_motor_a_movement,
             self.test_motor_b_movement,
@@ -614,16 +743,28 @@ class GPIOTester:
 
         return results
 
-    def run_feedback_test(self) -> List[TestOutput]:
-        """Run feedback-only test (no 12V/valve actuation needed).
+    def run_resistor_test(self) -> List[TestOutput]:
+        """Run pull-up resistor test (no valves connected).
 
-        Tests just the feedback pins to verify wiring without needing
-        12V power or valve actuation.
+        Verifies all feedback pins read HIGH, confirming pull-up resistors work.
         """
         results = []
 
-        # Only test feedback pins
-        result = self.test_feedback_pins()
+        result = self.test_pullup_resistors()
+        results.append(result)
+        self._emit_status(result.name, result.result, result.message, result.details)
+
+        return results
+
+    def run_valve_state_test(self) -> List[TestOutput]:
+        """Run valve state test (no actuation).
+
+        Checks valve positions without actuating them. Reports if each
+        valve is detected and whether it's open or closed.
+        """
+        results = []
+
+        result = self.test_valve_state()
         results.append(result)
         self._emit_status(result.name, result.result, result.message, result.details)
 

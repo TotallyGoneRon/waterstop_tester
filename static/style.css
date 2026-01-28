@@ -102,7 +102,7 @@ header h1 {
 
 .test-buttons {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
 }
 
@@ -148,13 +148,27 @@ header h1 {
     transform: translateY(-2px);
 }
 
-.btn-feedback {
+.test-buttons.secondary {
+    margin-top: 10px;
+}
+
+.btn-resistor {
     background: linear-gradient(135deg, #9c27b0, #7b1fa2);
     color: white;
 }
 
-.btn-feedback:hover {
+.btn-resistor:hover {
     background: linear-gradient(135deg, #ab47bc, #9c27b0);
+    transform: translateY(-2px);
+}
+
+.btn-valve-state {
+    background: linear-gradient(135deg, #00bcd4, #0097a7);
+    color: white;
+}
+
+.btn-valve-state:hover {
+    background: linear-gradient(135deg, #26c6da, #00bcd4);
     transform: translateY(-2px);
 }
 
@@ -426,14 +440,6 @@ header h1 {
 
 /* Responsive */
 @media (max-width: 500px) {
-    .test-buttons {
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .test-buttons .btn-feedback {
-        grid-column: span 2;
-    }
-
     .summary-content {
         flex-direction: column;
         gap: 10px;
@@ -443,9 +449,5 @@ header h1 {
 @media (max-width: 350px) {
     .test-buttons {
         grid-template-columns: 1fr;
-    }
-
-    .test-buttons .btn-feedback {
-        grid-column: span 1;
     }
 }

@@ -138,8 +138,10 @@ def run_test_thread(test_type, serial):
         # Run tests
         if test_type == 'full':
             results = tester.run_full_test()
-        elif test_type == 'feedback':
-            results = tester.run_feedback_test()
+        elif test_type == 'resistor':
+            results = tester.run_resistor_test()
+        elif test_type == 'valve_state':
+            results = tester.run_valve_state_test()
         else:
             results = tester.run_quick_test()
 

@@ -32,9 +32,15 @@
                     <span class="btn-title">FULL TEST</span>
                     <span class="btn-subtitle">(with valves)</span>
                 </button>
-                <button id="feedbackTestBtn" class="btn btn-feedback" onclick="runTest('feedback')">
-                    <span class="btn-title">FEEDBACK ONLY</span>
-                    <span class="btn-subtitle">(no 12V needed)</span>
+            </div>
+            <div class="test-buttons secondary">
+                <button id="resistorTestBtn" class="btn btn-resistor" onclick="runTest('resistor')">
+                    <span class="btn-title">RESISTOR TEST</span>
+                    <span class="btn-subtitle">(no valves)</span>
+                </button>
+                <button id="valveStateBtn" class="btn btn-valve-state" onclick="runTest('valve_state')">
+                    <span class="btn-title">VALVE STATE</span>
+                    <span class="btn-subtitle">(no actuation)</span>
                 </button>
             </div>
 
@@ -93,12 +99,14 @@
         ];
 
         const fullTests = [
-            ...quickTests,
+            'LED Test', 'STBY Pin', 'Motor A Direction', 'Motor B Direction',
+            'PWM Channel A', 'PWM Channel B', 'Valve State',
             'Motor A Movement', 'Motor B Movement', 'Fan PWM',
             'Cold Valve Cycle', 'Hot Valve Cycle'
         ];
 
-        const feedbackTests = ['Feedback Pins'];
+        const resistorTests = ['Pull-up Resistors'];
+        const valveStateTests = ['Valve State'];
 
         // Connection status
         socket.on('connect', () => {
@@ -152,8 +160,10 @@
             let tests;
             if (data.type === 'full') {
                 tests = fullTests;
-            } else if (data.type === 'feedback') {
-                tests = feedbackTests;
+            } else if (data.type === 'resistor') {
+                tests = resistorTests;
+            } else if (data.type === 'valve_state') {
+                tests = valveStateTests;
             } else {
                 tests = quickTests;
             }
@@ -192,25 +202,21 @@
 
         function setRunningState(running) {
             isRunning = running;
-            const quickBtn = document.getElementById('quickTestBtn');
-            const fullBtn = document.getElementById('fullTestBtn');
-            const feedbackBtn = document.getElementById('feedbackTestBtn');
+            const buttons = [
+                'quickTestBtn', 'fullTestBtn', 'resistorTestBtn', 'valveStateBtn'
+            ];
 
-            if (running) {
-                quickBtn.disabled = true;
-                fullBtn.disabled = true;
-                feedbackBtn.disabled = true;
-                quickBtn.classList.add('disabled');
-                fullBtn.classList.add('disabled');
-                feedbackBtn.classList.add('disabled');
-            } else {
-                quickBtn.disabled = false;
-                fullBtn.disabled = false;
-                feedbackBtn.disabled = false;
-                quickBtn.classList.remove('disabled');
-                fullBtn.classList.remove('disabled');
-                feedbackBtn.classList.remove('disabled');
-            }
+            buttons.forEach(id => {
+                const btn = document.getElementById(id);
+                if (btn) {
+                    btn.disabled = running;
+                    if (running) {
+                        btn.classList.add('disabled');
+                    } else {
+                        btn.classList.remove('disabled');
+                    }
+                }
+            });
         }
 
         function initializeResults(tests) {
