@@ -154,6 +154,64 @@ header h1 {
     transform: none !important;
 }
 
+/* Manual Controls */
+.manual-controls {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #333;
+}
+
+.manual-controls h3 {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #888;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+.toggle-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.btn-toggle {
+    background: #333;
+    color: #aaa;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.btn-toggle .btn-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0;
+}
+
+.btn-toggle .btn-state {
+    font-size: 0.75rem;
+    padding: 3px 10px;
+    background: #222;
+    border-radius: 10px;
+}
+
+.btn-toggle:hover {
+    background: #444;
+    transform: translateY(-2px);
+}
+
+.btn-toggle.active {
+    background: linear-gradient(135deg, #4caf50, #388e3c);
+    color: white;
+}
+
+.btn-toggle.active .btn-state {
+    background: rgba(255, 255, 255, 0.2);
+}
+
 /* Results Section */
 .results {
     background: #252540;

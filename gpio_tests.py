@@ -118,6 +118,43 @@ class GPIOTester:
             self.gpio.cleanup()
             self._initialized = False
 
+    def turn_fan_on(self, duty_cycle: int = 100):
+        """Turn fan on at specified duty cycle (0-100)."""
+        if not self._initialized:
+            raise RuntimeError("GPIO not initialized")
+
+        # Stop existing PWM if running
+        if self.pwm_fan:
+            self.pwm_fan.stop()
+
+        self.pwm_fan = self.gpio.PWM(Pins.FAN_PWM, 25000)  # 25kHz for fan
+        self.pwm_fan.start(duty_cycle)
+
+    def turn_fan_off(self):
+        """Turn fan off."""
+        if not self._initialized:
+            raise RuntimeError("GPIO not initialized")
+
+        if self.pwm_fan:
+            self.pwm_fan.stop()
+            self.pwm_fan = None
+
+        self.gpio.output(Pins.FAN_PWM, self.gpio.LOW)
+
+    def turn_led_on(self):
+        """Turn LED on."""
+        if not self._initialized:
+            raise RuntimeError("GPIO not initialized")
+
+        self.gpio.output(Pins.LED, self.gpio.HIGH)
+
+    def turn_led_off(self):
+        """Turn LED off."""
+        if not self._initialized:
+            raise RuntimeError("GPIO not initialized")
+
+        self.gpio.output(Pins.LED, self.gpio.LOW)
+
     def test_led(self) -> TestOutput:
         """Test status LED on/off."""
         test_name = "LED Test"

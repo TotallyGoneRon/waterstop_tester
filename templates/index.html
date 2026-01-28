@@ -33,6 +33,20 @@
                     <span class="btn-subtitle">(with valves)</span>
                 </button>
             </div>
+
+            <div class="manual-controls">
+                <h3>MANUAL CONTROLS</h3>
+                <div class="toggle-buttons">
+                    <button id="fanToggleBtn" class="btn btn-toggle" onclick="toggleFan()">
+                        <span class="btn-title">FAN</span>
+                        <span class="btn-state" id="fanState">OFF</span>
+                    </button>
+                    <button id="ledToggleBtn" class="btn btn-toggle" onclick="toggleLed()">
+                        <span class="btn-title">LED</span>
+                        <span class="btn-state" id="ledState">OFF</span>
+                    </button>
+                </div>
+            </div>
         </section>
 
         <section class="results">
@@ -65,6 +79,8 @@
         // Socket.IO connection
         const socket = io();
         let isRunning = false;
+        let fanOn = false;
+        let ledOn = false;
 
         // Test definitions for display
         const quickTests = [
@@ -106,6 +122,22 @@
             if (data.results && data.results.length > 0) {
                 displayResults(data.results);
             }
+            if (data.fan_on !== undefined) {
+                updateFanState(data.fan_on);
+            }
+            if (data.led_on !== undefined) {
+                updateLedState(data.led_on);
+            }
+        });
+
+        // Fan state update
+        socket.on('fan_state', (data) => {
+            updateFanState(data.on);
+        });
+
+        // LED state update
+        socket.on('led_state', (data) => {
+            updateLedState(data.on);
         });
 
         // Test started
@@ -245,13 +277,22 @@
             updateRunningCount();
         }
 
-        function displayResults(results) {
+        function displayResults(results, updateSummaryToo = true) {
             const list = document.getElementById('resultsList');
             list.innerHTML = '';
 
+            let passed = 0;
+            let failed = 0;
+
             results.forEach(r => {
                 list.innerHTML += createResultItem(r.name, r.result, r.message, r.details);
+                if (r.result === 'pass') passed++;
+                else if (r.result === 'fail') failed++;
             });
+
+            if (updateSummaryToo && results.length > 0) {
+                updateSummary(passed, results.length, failed === 0);
+            }
         }
 
         function updateRunningCount() {
@@ -328,6 +369,41 @@
                         `;
                     }).join('');
                 });
+        }
+
+        // Manual control functions
+        function toggleFan() {
+            if (isRunning) return;
+            socket.emit('toggle_fan', { on: !fanOn });
+        }
+
+        function toggleLed() {
+            if (isRunning) return;
+            socket.emit('toggle_led', { on: !ledOn });
+        }
+
+        function updateFanState(on) {
+            fanOn = on;
+            const btn = document.getElementById('fanToggleBtn');
+            const state = document.getElementById('fanState');
+            state.textContent = on ? 'ON' : 'OFF';
+            if (on) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        }
+
+        function updateLedState(on) {
+            ledOn = on;
+            const btn = document.getElementById('ledToggleBtn');
+            const state = document.getElementById('ledState');
+            state.textContent = on ? 'ON' : 'OFF';
+            if (on) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
         }
 
         // Load history on page load

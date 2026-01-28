@@ -28,8 +28,16 @@ current_test = {
     'start_time': None
 }
 
+# Manual control state
+manual_control = {
+    'fan_on': False,
+    'led_on': False,
+    'gpio_tester': None
+}
+
 # Lock for thread safety
 test_lock = threading.Lock()
+manual_lock = threading.Lock()
 
 
 def emit_update(event, data):
@@ -64,7 +72,9 @@ def handle_connect():
     """Client connected."""
     emit('status', {
         'running': current_test['running'],
-        'results': current_test['results']
+        'results': current_test['results'],
+        'fan_on': manual_control['fan_on'],
+        'led_on': manual_control['led_on']
     })
 
 
@@ -213,6 +223,88 @@ def handle_stop_test():
         if current_test['running']:
             current_test['running'] = False
             emit('test_stopped', {'message': 'Test stop requested'})
+
+
+@socketio.on('toggle_fan')
+def handle_toggle_fan(data):
+    """Toggle fan on/off for manual testing."""
+    global manual_control
+
+    turn_on = data.get('on', False)
+
+    with manual_lock:
+        if current_test['running']:
+            emit('error', {'message': 'Cannot control fan while test is running'})
+            return
+
+        try:
+            from gpio_tests import GPIOTester, Pins
+
+            # Initialize tester if needed
+            if manual_control['gpio_tester'] is None:
+                manual_control['gpio_tester'] = GPIOTester()
+                if not manual_control['gpio_tester'].setup():
+                    emit('error', {'message': 'Failed to initialize GPIO'})
+                    manual_control['gpio_tester'] = None
+                    return
+
+            tester = manual_control['gpio_tester']
+
+            if turn_on:
+                tester.turn_fan_on()
+                manual_control['fan_on'] = True
+            else:
+                tester.turn_fan_off()
+                manual_control['fan_on'] = False
+
+            emit('fan_state', {'on': manual_control['fan_on']})
+            socketio.emit('fan_state', {'on': manual_control['fan_on']})
+
+        except ImportError as e:
+            emit('error', {'message': f'GPIO library not available: {e}'})
+        except Exception as e:
+            emit('error', {'message': f'Fan control error: {e}'})
+
+
+@socketio.on('toggle_led')
+def handle_toggle_led(data):
+    """Toggle LED on/off for manual testing."""
+    global manual_control
+
+    turn_on = data.get('on', False)
+
+    with manual_lock:
+        if current_test['running']:
+            emit('error', {'message': 'Cannot control LED while test is running'})
+            return
+
+        try:
+            from gpio_tests import GPIOTester, Pins
+
+            # Initialize tester if needed
+            if manual_control['gpio_tester'] is None:
+                manual_control['gpio_tester'] = GPIOTester()
+                if not manual_control['gpio_tester'].setup():
+                    emit('error', {'message': 'Failed to initialize GPIO'})
+                    manual_control['gpio_tester'] = None
+                    return
+
+            tester = manual_control['gpio_tester']
+
+            if turn_on:
+                tester.turn_led_on()
+                manual_control['led_on'] = True
+            else:
+                tester.turn_led_off()
+                manual_control['led_on'] = False
+
+            emit('led_state', {'on': manual_control['led_on']})
+            socketio.emit('led_state', {'on': manual_control['led_on']})
+
+        except ImportError as e:
+            emit('error', {'message': f'GPIO library not available: {e}'})
+        except Exception as e:
+            emit('error', {'message': f'LED control error: {e}'})
 
 
 if __name__ == '__main__':
