@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waterstop HAT Tester</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>WATERSTOP HAT TESTER</h1>
+            <div class="status-indicator" id="connectionStatus">
+                <span class="dot"></span>
+                <span class="text">Connecting...</span>
+            </div>
+        </header>
+
+        <section class="controls">
+            <div class="serial-input">
+                <label for="serialNumber">Serial Number:</label>
+                <input type="text" id="serialNumber" placeholder="(optional)" maxlength="20">
+            </div>
+
+            <div class="test-buttons">
+                <button id="quickTestBtn" class="btn btn-quick" onclick="runTest('quick')">
+                    <span class="btn-title">QUICK TEST</span>
+                    <span class="btn-subtitle">(no valves)</span>
+                </button>
+                <button id="fullTestBtn" class="btn btn-full" onclick="runTest('full')">
+                    <span class="btn-title">FULL TEST</span>
+                    <span class="btn-subtitle">(with valves)</span>
+                </button>
+            </div>
+        </section>
+
+        <section class="results">
+            <h2>TEST RESULTS</h2>
+            <div class="results-list" id="resultsList">
+                <div class="result-item waiting">
+                    <span class="result-icon">○</span>
+                    <span class="result-name">Ready to test</span>
+                    <span class="result-status">WAITING</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="summary" id="testSummary">
+            <div class="summary-content">
+                <span class="summary-count" id="summaryCount">0/0 PASSED</span>
+                <span class="summary-status" id="summaryStatus">READY</span>
+            </div>
+        </section>
+
+        <section class="history">
+            <h2>RECENT TESTS</h2>
+            <div class="history-list" id="historyList">
+                <div class="history-empty">No tests yet</div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        // Socket.IO connection
+        const socket = io();
+        let isRunning = false;
+
+        // Test definitions for display
+        const quickTests = [
+            'LED Test', 'STBY Pin', 'Motor A Direction', 'Motor B Direction',
+            'PWM Channel A', 'PWM Channel B', 'Feedback Pins'
+        ];
+
+        const fullTests = [
+            ...quickTests,
+            'Motor A Movement', 'Motor B Movement', 'Fan PWM',
+            'Cold Valve Cycle', 'Hot Valve Cycle'
+        ];
+
+        // Connection status
+        socket.on('connect', () => {
+            updateConnectionStatus(true);
+        });
+
+        socket.on('disconnect', () => {
+            updateConnectionStatus(false);
+        });
+
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connectionStatus');
+            if (connected) {
+                status.className = 'status-indicator connected';
+                status.querySelector('.text').textContent = 'Connected';
+            } else {
+                status.className = 'status-indicator disconnected';
+                status.querySelector('.text').textContent = 'Disconnected';
+            }
+        }
+
+        // Initial status
+        socket.on('status', (data) => {
+            if (data.running) {
+                setRunningState(true);
+            }
+            if (data.results && data.results.length > 0) {
+                displayResults(data.results);
+            }
+        });
+
+        // Test started
+        socket.on('test_started', (data) => {
+            setRunningState(true);
+            const tests = data.type === 'full' ? fullTests : quickTests;
+            initializeResults(tests);
+        });
+
+        // Test update
+        socket.on('test_update', (data) => {
+            updateResult(data.name, data.result, data.message, data.details);
+        });
+
+        // Test complete
+        socket.on('test_complete', (data) => {
+            setRunningState(false);
+            if (data.results) {
+                displayResults(data.results);
+            }
+            updateSummary(data.passed, data.total, data.success);
+            if (data.message) {
+                showError(data.message);
+            }
+            loadHistory();
+        });
+
+        // Error
+        socket.on('error', (data) => {
+            showError(data.message);
+        });
+
+        function runTest(type) {
+            if (isRunning) return;
+
+            const serial = document.getElementById('serialNumber').value.trim();
+            socket.emit('run_test', { type: type, serial: serial });
+        }
+
+        function setRunningState(running) {
+            isRunning = running;
+            const quickBtn = document.getElementById('quickTestBtn');
+            const fullBtn = document.getElementById('fullTestBtn');
+
+            if (running) {
+                quickBtn.disabled = true;
+                fullBtn.disabled = true;
+                quickBtn.classList.add('disabled');
+                fullBtn.classList.add('disabled');
+            } else {
+                quickBtn.disabled = false;
+                fullBtn.disabled = false;
+                quickBtn.classList.remove('disabled');
+                fullBtn.classList.remove('disabled');
+            }
+        }
+
+        function initializeResults(tests) {
+            const list = document.getElementById('resultsList');
+            list.innerHTML = '';
+
+            // Add GPIO Setup first
+            list.innerHTML += createResultItem('GPIO Setup', 'running', 'Initializing...');
+
+            tests.forEach(test => {
+                list.innerHTML += createResultItem(test, 'waiting', 'WAITING');
+            });
+
+            updateSummary(0, tests.length, null);
+        }
+
+        function createResultItem(name, status, message, details) {
+            const icons = {
+                'pass': '●',
+                'fail': '●',
+                'running': '◐',
+                'waiting': '○',
+                'skip': '○'
+            };
+
+            const statusText = {
+                'pass': 'PASS',
+                'fail': 'FAIL',
+                'running': 'TESTING...',
+                'waiting': 'WAITING',
+                'skip': 'SKIP'
+            };
+
+            let detailHtml = '';
+            if (details) {
+                detailHtml = `<div class="result-details">${details}</div>`;
+            }
+
+            return `
+                <div class="result-item ${status}">
+                    <span class="result-icon">${icons[status] || '○'}</span>
+                    <span class="result-name">${name}</span>
+                    <span class="result-status">${statusText[status] || status.toUpperCase()}</span>
+                    ${detailHtml}
+                </div>
+            `;
+        }
+
+        function updateResult(name, status, message, details) {
+            const list = document.getElementById('resultsList');
+            const items = list.querySelectorAll('.result-item');
+
+            items.forEach(item => {
+                const itemName = item.querySelector('.result-name').textContent;
+                if (itemName === name) {
+                    item.className = `result-item ${status}`;
+                    item.querySelector('.result-icon').textContent =
+                        status === 'pass' ? '●' :
+                        status === 'fail' ? '●' :
+                        status === 'running' ? '◐' : '○';
+                    item.querySelector('.result-status').textContent =
+                        status === 'pass' ? 'PASS' :
+                        status === 'fail' ? 'FAIL' :
+                        status === 'running' ? 'TESTING...' : 'WAITING';
+
+                    // Update or add details
+                    let detailEl = item.querySelector('.result-details');
+                    if (details) {
+                        if (!detailEl) {
+                            detailEl = document.createElement('div');
+                            detailEl.className = 'result-details';
+                            item.appendChild(detailEl);
+                        }
+                        detailEl.textContent = details;
+                    } else if (detailEl) {
+                        detailEl.remove();
+                    }
+                }
+            });
+
+            // Update running count
+            updateRunningCount();
+        }
+
+        function displayResults(results) {
+            const list = document.getElementById('resultsList');
+            list.innerHTML = '';
+
+            results.forEach(r => {
+                list.innerHTML += createResultItem(r.name, r.result, r.message, r.details);
+            });
+        }
+
+        function updateRunningCount() {
+            const items = document.querySelectorAll('.result-item');
+            let passed = 0;
+            let total = 0;
+
+            items.forEach(item => {
+                if (item.querySelector('.result-name').textContent !== 'GPIO Setup') {
+                    total++;
+                    if (item.classList.contains('pass')) {
+                        passed++;
+                    }
+                }
+            });
+
+            document.getElementById('summaryCount').textContent = `${passed}/${total} PASSED`;
+        }
+
+        function updateSummary(passed, total, success) {
+            const count = document.getElementById('summaryCount');
+            const status = document.getElementById('summaryStatus');
+            const summary = document.getElementById('testSummary');
+
+            count.textContent = `${passed || 0}/${total || 0} PASSED`;
+
+            if (success === null) {
+                status.textContent = 'TESTING...';
+                summary.className = 'summary running';
+            } else if (success) {
+                status.textContent = 'ALL PASSED';
+                summary.className = 'summary success';
+            } else {
+                status.textContent = 'FAILED';
+                summary.className = 'summary failed';
+            }
+        }
+
+        function showError(message) {
+            const list = document.getElementById('resultsList');
+            list.innerHTML = `
+                <div class="result-item fail">
+                    <span class="result-icon">●</span>
+                    <span class="result-name">Error</span>
+                    <span class="result-status">${message}</span>
+                </div>
+            `;
+        }
+
+        function loadHistory() {
+            fetch('/api/history')
+                .then(res => res.json())
+                .then(history => {
+                    const list = document.getElementById('historyList');
+
+                    if (history.length === 0) {
+                        list.innerHTML = '<div class="history-empty">No tests yet</div>';
+                        return;
+                    }
+
+                    list.innerHTML = history.map(h => {
+                        const date = new Date(h.timestamp);
+                        const time = date.toLocaleTimeString();
+                        const serial = h.serial || 'No serial';
+                        const resultClass = h.success ? 'success' : 'failed';
+
+                        return `
+                            <div class="history-item ${resultClass}">
+                                <span class="history-time">${time}</span>
+                                <span class="history-serial">${serial}</span>
+                                <span class="history-type">${h.type.toUpperCase()}</span>
+                                <span class="history-result">${h.passed}/${h.total}</span>
+                            </div>
+                        `;
+                    }).join('');
+                });
+        }
+
+        // Load history on page load
+        loadHistory();
+    </script>
+</body>
+</html>
