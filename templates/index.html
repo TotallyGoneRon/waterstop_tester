@@ -32,6 +32,10 @@
                     <span class="btn-title">FULL TEST</span>
                     <span class="btn-subtitle">(with valves)</span>
                 </button>
+                <button id="feedbackTestBtn" class="btn btn-feedback" onclick="runTest('feedback')">
+                    <span class="btn-title">FEEDBACK ONLY</span>
+                    <span class="btn-subtitle">(no 12V needed)</span>
+                </button>
             </div>
 
             <div class="manual-controls">
@@ -94,6 +98,8 @@
             'Cold Valve Cycle', 'Hot Valve Cycle'
         ];
 
+        const feedbackTests = ['Feedback Pins'];
+
         // Connection status
         socket.on('connect', () => {
             updateConnectionStatus(true);
@@ -143,7 +149,14 @@
         // Test started
         socket.on('test_started', (data) => {
             setRunningState(true);
-            const tests = data.type === 'full' ? fullTests : quickTests;
+            let tests;
+            if (data.type === 'full') {
+                tests = fullTests;
+            } else if (data.type === 'feedback') {
+                tests = feedbackTests;
+            } else {
+                tests = quickTests;
+            }
             initializeResults(tests);
         });
 
@@ -181,17 +194,22 @@
             isRunning = running;
             const quickBtn = document.getElementById('quickTestBtn');
             const fullBtn = document.getElementById('fullTestBtn');
+            const feedbackBtn = document.getElementById('feedbackTestBtn');
 
             if (running) {
                 quickBtn.disabled = true;
                 fullBtn.disabled = true;
+                feedbackBtn.disabled = true;
                 quickBtn.classList.add('disabled');
                 fullBtn.classList.add('disabled');
+                feedbackBtn.classList.add('disabled');
             } else {
                 quickBtn.disabled = false;
                 fullBtn.disabled = false;
+                feedbackBtn.disabled = false;
                 quickBtn.classList.remove('disabled');
                 fullBtn.classList.remove('disabled');
+                feedbackBtn.classList.remove('disabled');
             }
         }
 

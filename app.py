@@ -138,6 +138,8 @@ def run_test_thread(test_type, serial):
         # Run tests
         if test_type == 'full':
             results = tester.run_full_test()
+        elif test_type == 'feedback':
+            results = tester.run_feedback_test()
         else:
             results = tester.run_quick_test()
 
@@ -257,6 +259,11 @@ def handle_toggle_fan(data):
                 tester.turn_fan_off()
                 manual_control['fan_on'] = False
 
+                # Cleanup GPIO if both fan and LED are off (safe to swap HAT)
+                if not manual_control['fan_on'] and not manual_control['led_on']:
+                    tester.cleanup()
+                    manual_control['gpio_tester'] = None
+
             emit('fan_state', {'on': manual_control['fan_on']})
             socketio.emit('fan_state', {'on': manual_control['fan_on']})
 
@@ -297,6 +304,11 @@ def handle_toggle_led(data):
             else:
                 tester.turn_led_off()
                 manual_control['led_on'] = False
+
+                # Cleanup GPIO if both fan and LED are off (safe to swap HAT)
+                if not manual_control['fan_on'] and not manual_control['led_on']:
+                    tester.cleanup()
+                    manual_control['gpio_tester'] = None
 
             emit('led_state', {'on': manual_control['led_on']})
             socketio.emit('led_state', {'on': manual_control['led_on']})

@@ -102,8 +102,8 @@ header h1 {
 
 .test-buttons {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
 }
 
 .btn {
@@ -145,6 +145,16 @@ header h1 {
 
 .btn-full:hover {
     background: linear-gradient(135deg, #ffa726, #ff9800);
+    transform: translateY(-2px);
+}
+
+.btn-feedback {
+    background: linear-gradient(135deg, #9c27b0, #7b1fa2);
+    color: white;
+}
+
+.btn-feedback:hover {
+    background: linear-gradient(135deg, #ab47bc, #9c27b0);
     transform: translateY(-2px);
 }
 
@@ -415,13 +425,27 @@ header h1 {
 }
 
 /* Responsive */
-@media (max-width: 400px) {
+@media (max-width: 500px) {
     .test-buttons {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .test-buttons .btn-feedback {
+        grid-column: span 2;
     }
 
     .summary-content {
         flex-direction: column;
         gap: 10px;
+    }
+}
+
+@media (max-width: 350px) {
+    .test-buttons {
+        grid-template-columns: 1fr;
+    }
+
+    .test-buttons .btn-feedback {
+        grid-column: span 1;
     }
 }

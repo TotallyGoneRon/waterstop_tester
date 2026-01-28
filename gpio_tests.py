@@ -613,3 +613,18 @@ class GPIOTester:
             time.sleep(0.1)
 
         return results
+
+    def run_feedback_test(self) -> List[TestOutput]:
+        """Run feedback-only test (no 12V/valve actuation needed).
+
+        Tests just the feedback pins to verify wiring without needing
+        12V power or valve actuation.
+        """
+        results = []
+
+        # Only test feedback pins
+        result = self.test_feedback_pins()
+        results.append(result)
+        self._emit_status(result.name, result.result, result.message, result.details)
+
+        return results
