@@ -4,6 +4,10 @@ Waterstop HAT Tester - Web Interface
 Flask + SocketIO app for testing Waterstop HATs during QC.
 """
 
+# Monkey-patch for eventlet (must be first)
+import eventlet
+eventlet.monkey_patch()
+
 import os
 import json
 import threading
@@ -41,8 +45,9 @@ manual_lock = threading.Lock()
 
 
 def emit_update(event, data):
-    """Thread-safe emit to all clients."""
+    """Thread-safe emit to all clients with yield."""
     socketio.emit(event, data)
+    eventlet.sleep(0)  # Yield to allow message to be sent
 
 
 @app.route('/')

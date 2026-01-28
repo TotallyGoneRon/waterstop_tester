@@ -4,6 +4,11 @@ Tests motor driver, feedback pins, LED, and fan control.
 """
 
 import time
+try:
+    import eventlet
+    sleep = eventlet.sleep  # Use eventlet sleep for better WebSocket responsiveness
+except ImportError:
+    sleep = sleep  # Fallback to standard sleep
 from typing import Dict, List, Tuple, Callable, Optional
 from dataclasses import dataclass
 from enum import Enum
@@ -163,18 +168,18 @@ class GPIOTester:
 
             # Turn LED on
             self.gpio.output(Pins.LED, self.gpio.HIGH)
-            time.sleep(0.3)
+            sleep(0.3)
 
             # Turn LED off
             self.gpio.output(Pins.LED, self.gpio.LOW)
-            time.sleep(0.1)
+            sleep(0.1)
 
             # Blink pattern to confirm
             for _ in range(3):
                 self.gpio.output(Pins.LED, self.gpio.HIGH)
-                time.sleep(0.1)
+                sleep(0.1)
                 self.gpio.output(Pins.LED, self.gpio.LOW)
-                time.sleep(0.1)
+                sleep(0.1)
 
             return TestOutput(test_name, TestResult.PASS, "LED toggled successfully")
 
@@ -189,11 +194,11 @@ class GPIOTester:
 
             # Test high
             self.gpio.output(Pins.STBY, self.gpio.HIGH)
-            time.sleep(0.05)
+            sleep(0.05)
 
             # Test low
             self.gpio.output(Pins.STBY, self.gpio.LOW)
-            time.sleep(0.05)
+            sleep(0.05)
 
             return TestOutput(test_name, TestResult.PASS, "STBY pin toggles correctly")
 
@@ -209,12 +214,12 @@ class GPIOTester:
             # Forward: AIN1=HIGH, AIN2=LOW
             self.gpio.output(Pins.AIN1, self.gpio.HIGH)
             self.gpio.output(Pins.AIN2, self.gpio.LOW)
-            time.sleep(0.05)
+            sleep(0.05)
 
             # Reverse: AIN1=LOW, AIN2=HIGH
             self.gpio.output(Pins.AIN1, self.gpio.LOW)
             self.gpio.output(Pins.AIN2, self.gpio.HIGH)
-            time.sleep(0.05)
+            sleep(0.05)
 
             # Stop: both LOW
             self.gpio.output(Pins.AIN1, self.gpio.LOW)
@@ -234,12 +239,12 @@ class GPIOTester:
             # Forward: BIN1=HIGH, BIN2=LOW
             self.gpio.output(Pins.BIN1, self.gpio.HIGH)
             self.gpio.output(Pins.BIN2, self.gpio.LOW)
-            time.sleep(0.05)
+            sleep(0.05)
 
             # Reverse: BIN1=LOW, BIN2=HIGH
             self.gpio.output(Pins.BIN1, self.gpio.LOW)
             self.gpio.output(Pins.BIN2, self.gpio.HIGH)
-            time.sleep(0.05)
+            sleep(0.05)
 
             # Stop: both LOW
             self.gpio.output(Pins.BIN1, self.gpio.LOW)
@@ -263,7 +268,7 @@ class GPIOTester:
             # Sweep duty cycle
             for duty in [25, 50, 75, 100, 0]:
                 self.pwm_a.ChangeDutyCycle(duty)
-                time.sleep(0.05)
+                sleep(0.05)
 
             self.pwm_a.stop()
             self.pwm_a = None
@@ -286,7 +291,7 @@ class GPIOTester:
             # Sweep duty cycle
             for duty in [25, 50, 75, 100, 0]:
                 self.pwm_b.ChangeDutyCycle(duty)
-                time.sleep(0.05)
+                sleep(0.05)
 
             self.pwm_b.stop()
             self.pwm_b = None
@@ -464,7 +469,7 @@ class GPIOTester:
             # Sweep: 0 -> 50 -> 100 -> 0
             for duty in [0, 25, 50, 75, 100, 50, 0]:
                 self.pwm_fan.ChangeDutyCycle(duty)
-                time.sleep(0.2)
+                sleep(0.2)
 
             self.pwm_fan.stop()
             self.pwm_fan = None
@@ -513,7 +518,7 @@ class GPIOTester:
             pwm.start(100)  # Full speed
 
             # Run for duration
-            time.sleep(duration)
+            sleep(duration)
 
             # Stop
             pwm.stop()
@@ -522,7 +527,7 @@ class GPIOTester:
             self.gpio.output(Pins.STBY, self.gpio.LOW)
 
             # Check feedback
-            time.sleep(0.1)
+            sleep(0.1)
             open_state = self.gpio.input(fb_open)
             close_state = self.gpio.input(fb_close)
 
@@ -544,7 +549,7 @@ class GPIOTester:
             if not success:
                 return TestOutput(test_name, TestResult.FAIL, f"Motor A failed: {msg}")
 
-            time.sleep(0.2)
+            sleep(0.2)
 
             # Brief close pulse
             success, msg = self._move_motor('A', 'close', 0.3)
@@ -567,7 +572,7 @@ class GPIOTester:
             if not success:
                 return TestOutput(test_name, TestResult.FAIL, f"Motor B failed: {msg}")
 
-            time.sleep(0.2)
+            sleep(0.2)
 
             # Brief close pulse
             success, msg = self._move_motor('B', 'close', 0.3)
@@ -624,7 +629,7 @@ class GPIOTester:
                 if elapsed > last_update:
                     last_update = elapsed
                     self._emit_status(test_name, TestResult.RUNNING, f"{name}: Opening... {elapsed}s")
-                time.sleep(0.05)
+                sleep(0.05)
 
             open_reached = self.gpio.input(fb_open) == 0
 
@@ -637,7 +642,7 @@ class GPIOTester:
                 self._emit_status(test_name, TestResult.RUNNING, f"{name}: Opened OK, pausing...")
             else:
                 self._emit_status(test_name, TestResult.RUNNING, f"{name}: Open TIMEOUT, trying close...")
-            time.sleep(0.3)
+            sleep(0.3)
 
             # Close valve
             self._emit_status(test_name, TestResult.RUNNING, f"{name}: Closing valve...")
@@ -654,7 +659,7 @@ class GPIOTester:
                 if elapsed > last_update:
                     last_update = elapsed
                     self._emit_status(test_name, TestResult.RUNNING, f"{name}: Closing... {elapsed}s")
-                time.sleep(0.05)
+                sleep(0.05)
 
             close_reached = self.gpio.input(fb_close) == 0
 
@@ -731,7 +736,7 @@ class GPIOTester:
             result = test()
             results.append(result)
             self._emit_status(result.name, result.result, result.message, result.details)
-            time.sleep(0.1)
+            sleep(0.1)
 
         # Feedback pins - just report state
         result = self.test_feedback_pins()
@@ -758,13 +763,13 @@ class GPIOTester:
             result = test()
             results.append(result)
             self._emit_status(result.name, result.result, result.message, result.details)
-            time.sleep(0.1)
+            sleep(0.1)
 
         # Valve state check (expects valves connected)
         result = self.test_valve_state()
         results.append(result)
         self._emit_status(result.name, result.result, result.message, result.details)
-        time.sleep(0.1)
+        sleep(0.1)
 
         # Full tests with valve actuation
         full_tests = [
@@ -779,7 +784,7 @@ class GPIOTester:
             result = test()
             results.append(result)
             self._emit_status(result.name, result.result, result.message, result.details)
-            time.sleep(0.1)
+            sleep(0.1)
 
         return results
 
