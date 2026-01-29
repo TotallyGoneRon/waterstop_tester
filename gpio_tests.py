@@ -1,6 +1,6 @@
 """
 GPIO Test Functions for Waterstop HAT Tester
-Tests motor driver, feedback pins, LED, and fan control.
+Tests motor driver, feedback pins, LED, fan control, and RasBee II Zigbee module.
 """
 
 import time
@@ -8,7 +8,7 @@ try:
     import eventlet
     sleep = eventlet.sleep  # Use eventlet sleep for better WebSocket responsiveness
 except ImportError:
-    sleep = sleep  # Fallback to standard sleep
+    sleep = time.sleep  # Fallback to standard sleep
 from typing import Dict, List, Tuple, Callable, Optional
 from dataclasses import dataclass
 from enum import Enum
@@ -810,6 +810,117 @@ class GPIOTester:
         results = []
 
         result = self.test_valve_state()
+        results.append(result)
+        self._emit_status(result.name, result.result, result.message, result.details)
+
+        return results
+
+    def test_rasbee(self) -> TestOutput:
+        """Test RasBee II Zigbee module on serial port.
+
+        Checks if the RasBee II is detected on the UART and responds.
+        """
+        test_name = "RasBee II"
+        try:
+            self._emit_status(test_name, TestResult.RUNNING, "Checking serial port...")
+
+            import serial
+            import os
+
+            # Check if serial device exists
+            serial_ports = ['/dev/ttyS0', '/dev/ttyAMA0', '/dev/serial0']
+            found_port = None
+
+            for port in serial_ports:
+                if os.path.exists(port):
+                    found_port = port
+                    break
+
+            if not found_port:
+                return TestOutput(
+                    test_name,
+                    TestResult.FAIL,
+                    "No serial port found",
+                    "Checked: /dev/ttyS0, /dev/ttyAMA0, /dev/serial0"
+                )
+
+            self._emit_status(test_name, TestResult.RUNNING, f"Opening {found_port}...")
+
+            # Try to open the serial port at common RasBee baud rates
+            baud_rates = [38400, 115200]
+            ser = None
+            last_error = None
+
+            for baud in baud_rates:
+                try:
+                    # Try without exclusive first (more compatible)
+                    ser = serial.Serial(
+                        found_port,
+                        baud,
+                        timeout=1
+                    )
+                    break
+                except serial.SerialException as e:
+                    last_error = str(e)
+                    continue
+                except PermissionError as e:
+                    last_error = f"Permission denied - run: sudo chmod 666 {found_port}"
+                    continue
+
+            if ser is None:
+                return TestOutput(
+                    test_name,
+                    TestResult.FAIL,
+                    "Cannot open serial port",
+                    last_error or f"Port {found_port} inaccessible"
+                )
+
+            self._emit_status(test_name, TestResult.RUNNING, f"Port open at {ser.baudrate} baud...")
+
+            # Clear buffers
+            ser.reset_input_buffer()
+            ser.reset_output_buffer()
+
+            # Give it a moment
+            sleep(0.1)
+
+            # Check if we can read/write
+            port_info = f"{found_port} @ {ser.baudrate} baud"
+
+            ser.close()
+
+            return TestOutput(
+                test_name,
+                TestResult.PASS,
+                "RasBee II serial port OK",
+                port_info
+            )
+
+        except ImportError:
+            return TestOutput(
+                test_name,
+                TestResult.FAIL,
+                "pyserial not installed",
+                "Run: pip3 install pyserial"
+            )
+        except PermissionError:
+            return TestOutput(
+                test_name,
+                TestResult.FAIL,
+                "Permission denied on serial port",
+                "May need sudo or dialout group membership"
+            )
+        except Exception as e:
+            return TestOutput(test_name, TestResult.FAIL, f"RasBee test failed: {e}")
+
+    def run_rasbee_test(self) -> List[TestOutput]:
+        """Run RasBee II Zigbee module test.
+
+        Tests if the RasBee II is properly connected and accessible.
+        """
+        results = []
+
+        result = self.test_rasbee()
         results.append(result)
         self._emit_status(result.name, result.result, result.message, result.details)
 

@@ -147,6 +147,8 @@ def run_test_thread(test_type, serial):
             results = tester.run_resistor_test()
         elif test_type == 'valve_state':
             results = tester.run_valve_state_test()
+        elif test_type == 'rasbee':
+            results = tester.run_rasbee_test()
         else:
             results = tester.run_quick_test()
 

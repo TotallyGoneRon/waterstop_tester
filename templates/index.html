@@ -42,6 +42,10 @@
                     <span class="btn-title">VALVE STATE</span>
                     <span class="btn-subtitle">(no actuation)</span>
                 </button>
+                <button id="rasbeeTestBtn" class="btn btn-rasbee" onclick="runTest('rasbee')">
+                    <span class="btn-title">RASBEE II</span>
+                    <span class="btn-subtitle">(Zigbee module)</span>
+                </button>
             </div>
 
             <div class="manual-controls">
@@ -107,6 +111,7 @@
 
         const resistorTests = ['Pull-up Resistors'];
         const valveStateTests = ['Valve State'];
+        const rasbeeTests = ['RasBee II'];
 
         // Connection status
         socket.on('connect', () => {
@@ -164,6 +169,8 @@
                 tests = resistorTests;
             } else if (data.type === 'valve_state') {
                 tests = valveStateTests;
+            } else if (data.type === 'rasbee') {
+                tests = rasbeeTests;
             } else {
                 tests = quickTests;
             }
@@ -203,7 +210,7 @@
         function setRunningState(running) {
             isRunning = running;
             const buttons = [
-                'quickTestBtn', 'fullTestBtn', 'resistorTestBtn', 'valveStateBtn'
+                'quickTestBtn', 'fullTestBtn', 'resistorTestBtn', 'valveStateBtn', 'rasbeeTestBtn'
             ];
 
             buttons.forEach(id => {

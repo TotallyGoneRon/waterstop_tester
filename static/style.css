@@ -150,6 +150,7 @@ header h1 {
 
 .test-buttons.secondary {
     margin-top: 10px;
+    grid-template-columns: 1fr 1fr 1fr;
 }
 
 .btn-resistor {
@@ -169,6 +170,16 @@ header h1 {
 
 .btn-valve-state:hover {
     background: linear-gradient(135deg, #26c6da, #00bcd4);
+    transform: translateY(-2px);
+}
+
+.btn-rasbee {
+    background: linear-gradient(135deg, #4caf50, #388e3c);
+    color: white;
+}
+
+.btn-rasbee:hover {
+    background: linear-gradient(135deg, #66bb6a, #4caf50);
     transform: translateY(-2px);
 }
 
