@@ -818,7 +818,7 @@ class GPIOTester:
     def test_rasbee(self) -> TestOutput:
         """Test RasBee II Zigbee module on serial port.
 
-        Checks if the RasBee II is detected on the UART and responds.
+        Checks if the RasBee II is detected and responds to deCONZ protocol query.
         """
         test_name = "RasBee II"
         try:
@@ -850,15 +850,16 @@ class GPIOTester:
             baud_rates = [38400, 115200]
             ser = None
             last_error = None
+            working_baud = None
 
             for baud in baud_rates:
                 try:
-                    # Try without exclusive first (more compatible)
                     ser = serial.Serial(
                         found_port,
                         baud,
                         timeout=1
                     )
+                    working_baud = baud
                     break
                 except serial.SerialException as e:
                     last_error = str(e)
@@ -875,26 +876,77 @@ class GPIOTester:
                     last_error or f"Port {found_port} inaccessible"
                 )
 
-            self._emit_status(test_name, TestResult.RUNNING, f"Port open at {ser.baudrate} baud...")
+            self._emit_status(test_name, TestResult.RUNNING, "Querying deCONZ device...")
 
             # Clear buffers
             ser.reset_input_buffer()
             ser.reset_output_buffer()
-
-            # Give it a moment
             sleep(0.1)
 
-            # Check if we can read/write
-            port_info = f"{found_port} @ {ser.baudrate} baud"
+            # deCONZ/ConBee protocol uses SLIP framing (0xC0 delimiter)
+            SLIP_END = 0xC0
 
+            # Build a simple "read firmware version" request (cmd 0x0D)
+            frame_data = bytes([
+                0x00,  # sequence
+                0x00,  # status
+                0x09, 0x00,  # frame length (little-endian)
+                0x0D,  # command: VERSION
+                0x00, 0x00, 0x00, 0x00  # reserved
+            ])
+
+            # Calculate CRC16 (CCITT)
+            def crc16(data):
+                crc = 0x0000
+                for byte in data:
+                    crc ^= byte << 8
+                    for _ in range(8):
+                        if crc & 0x8000:
+                            crc = (crc << 1) ^ 0x1021
+                        else:
+                            crc <<= 1
+                        crc &= 0xFFFF
+                return crc
+
+            crc = crc16(frame_data)
+            frame = bytes([SLIP_END]) + frame_data + bytes([crc & 0xFF, (crc >> 8) & 0xFF, SLIP_END])
+
+            # Send the query
+            ser.write(frame)
+            ser.flush()
+
+            self._emit_status(test_name, TestResult.RUNNING, "Waiting for response...")
+            sleep(0.5)
+
+            # Read response
+            response = ser.read(64)
             ser.close()
 
-            return TestOutput(
-                test_name,
-                TestResult.PASS,
-                "RasBee II serial port OK",
-                port_info
-            )
+            port_info = f"{found_port} @ {working_baud} baud"
+
+            if len(response) > 0:
+                # Check for SLIP framing (starts/ends with 0xC0)
+                if response[0] == SLIP_END or SLIP_END in response:
+                    return TestOutput(
+                        test_name,
+                        TestResult.PASS,
+                        "RasBee II detected (deCONZ)",
+                        f"{port_info} | Response: {len(response)} bytes"
+                    )
+                else:
+                    return TestOutput(
+                        test_name,
+                        TestResult.PASS,
+                        "Device responded (unknown protocol)",
+                        f"{port_info} | Response: {response[:20].hex()}"
+                    )
+            else:
+                return TestOutput(
+                    test_name,
+                    TestResult.FAIL,
+                    "No response from RasBee II",
+                    f"{port_info} | No device detected on serial port"
+                )
 
         except ImportError:
             return TestOutput(
