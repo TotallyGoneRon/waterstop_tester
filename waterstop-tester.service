@@ -1,0 +1,19 @@
+[Unit]
+Description=Waterstop HAT Tester Web Interface
+After=network.target
+
+[Service]
+Type=simple
+User=waterstoppro
+Group=waterstoppro
+WorkingDirectory=/home/waterstoppro/waterstop_tester
+ExecStart=/usr/bin/python3 /home/waterstoppro/waterstop_tester/app.py
+Restart=always
+RestartSec=5
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+Environment=HOME=/home/waterstoppro
+
+[Install]
+WantedBy=multi-user.target

@@ -52,13 +52,39 @@ else
     echo "  sudo udevadm control --reload-rules"
 fi
 
+# Install systemd service for auto-start and persistence
+echo
+echo "Installing systemd service..."
+SERVICE_FILE="/etc/systemd/system/waterstop-tester.service"
+
+if [ -w /etc/systemd/system ] || [ "$EUID" -eq 0 ]; then
+    # Update paths in service file to match install location
+    sed "s|/home/waterstoppro/waterstop_tester|$SCRIPT_DIR|g" "$SCRIPT_DIR/waterstop-tester.service" > "$SERVICE_FILE"
+
+    systemctl daemon-reload
+    systemctl enable waterstop-tester
+    systemctl start waterstop-tester
+
+    echo "Service installed and started!"
+    echo "The tester will now run on boot and survive terminal closure."
+else
+    echo "NOTE: Run with sudo to install the systemd service:"
+    echo "  sudo ./install.sh"
+fi
+
 echo
 echo "Installation complete!"
 echo
 echo "========================================"
-echo "  TO RUN THE TESTER:"
+echo "  SERVICE COMMANDS:"
+echo "  sudo systemctl start waterstop-tester"
+echo "  sudo systemctl stop waterstop-tester"
+echo "  sudo systemctl status waterstop-tester"
+echo "  sudo journalctl -u waterstop-tester -f"
+echo ""
+echo "  Or run manually:"
 echo "  python3 $SCRIPT_DIR/app.py"
 echo ""
-echo "  Then open in browser:"
+echo "  Open in browser:"
 echo "  http://<pi-ip>:8200"
 echo "========================================"
