@@ -818,7 +818,8 @@ class GPIOTester:
     def test_rasbee(self) -> TestOutput:
         """Test RasBee II Zigbee module on serial port.
 
-        Checks if the RasBee II is detected and responds to deCONZ protocol query.
+        Detects the RasBee II by capturing boot output after GPIO reset.
+        RasBee II modules output protocol data ~0.5s after reset.
         """
         test_name = "RasBee II"
         try:
@@ -827,10 +828,12 @@ class GPIOTester:
             import serial
             import os
 
-            # Check if serial device exists
-            serial_ports = ['/dev/ttyS0', '/dev/ttyAMA0', '/dev/serial0']
+            # Check if serial device exists (RaspBee HAT uses GPIO UART)
+            serial_ports = [
+                '/dev/serial0',    # Pi symlink (preferred, points to correct UART)
+                '/dev/ttyAMA0',    # Pi hardware UART (PL011)
+            ]
             found_port = None
-
             for port in serial_ports:
                 if os.path.exists(port):
                     found_port = port
@@ -841,112 +844,96 @@ class GPIOTester:
                     test_name,
                     TestResult.FAIL,
                     "No serial port found",
-                    "Checked: /dev/ttyS0, /dev/ttyAMA0, /dev/serial0"
+                    "Checked: " + ", ".join(serial_ports)
                 )
 
-            self._emit_status(test_name, TestResult.RUNNING, f"Opening {found_port}...")
+            # Protocol markers that indicate a valid RaspBee
+            SLIP_END = 0xC0   # deCONZ SLIP framing
+            HDLC_FLAG = 0x7E  # EZSP/ASH framing
 
-            # Try to open the serial port at common RasBee baud rates
-            baud_rates = [38400, 115200]
-            ser = None
+            # RaspBee reset pin (active low)
+            RESET_PIN = 17
+
+            # Try multiple baud rates - different firmware versions use different rates
+            baud_rates = [115200, 38400]
             last_error = None
-            working_baud = None
 
             for baud in baud_rates:
+                self._emit_status(
+                    test_name, TestResult.RUNNING,
+                    f"Testing {baud} baud..."
+                )
+
                 try:
-                    ser = serial.Serial(
-                        found_port,
-                        baud,
-                        timeout=1
-                    )
-                    working_baud = baud
-                    break
-                except serial.SerialException as e:
-                    last_error = str(e)
-                    continue
-                except PermissionError as e:
-                    last_error = f"Permission denied - run: sudo chmod 666 {found_port}"
-                    continue
+                    # Setup reset pin
+                    self.gpio.setup(RESET_PIN, self.gpio.OUT)
 
-            if ser is None:
-                return TestOutput(
-                    test_name,
-                    TestResult.FAIL,
-                    "Cannot open serial port",
-                    last_error or f"Port {found_port} inaccessible"
-                )
+                    # Open serial port
+                    ser = serial.Serial(found_port, baud, timeout=0.1)
 
-            self._emit_status(test_name, TestResult.RUNNING, "Querying deCONZ device...")
+                    # Reset the RaspBee and capture boot output
+                    self.gpio.output(RESET_PIN, self.gpio.LOW)
+                    sleep(0.1)
+                    ser.reset_input_buffer()
+                    self.gpio.output(RESET_PIN, self.gpio.HIGH)
 
-            # Clear buffers
-            ser.reset_input_buffer()
-            ser.reset_output_buffer()
-            sleep(0.1)
+                    # Capture data for 1.5 seconds after reset
+                    # Boot data typically appears at ~0.5s
+                    self._emit_status(test_name, TestResult.RUNNING, "Capturing boot data...")
+                    boot_data = b""
+                    start_time = time.time()
+                    while time.time() - start_time < 1.5:
+                        chunk = ser.read(100)
+                        if chunk:
+                            boot_data += chunk
+                        sleep(0.05)
 
-            # deCONZ/ConBee protocol uses SLIP framing (0xC0 delimiter)
-            SLIP_END = 0xC0
+                    ser.close()
 
-            # Build a simple "read firmware version" request (cmd 0x0D)
-            frame_data = bytes([
-                0x00,  # sequence
-                0x00,  # status
-                0x09, 0x00,  # frame length (little-endian)
-                0x0D,  # command: VERSION
-                0x00, 0x00, 0x00, 0x00  # reserved
-            ])
+                    # Release reset pin
+                    self.gpio.setup(RESET_PIN, self.gpio.IN)
 
-            # Calculate CRC16 (CCITT)
-            def crc16(data):
-                crc = 0x0000
-                for byte in data:
-                    crc ^= byte << 8
-                    for _ in range(8):
-                        if crc & 0x8000:
-                            crc = (crc << 1) ^ 0x1021
+                    if len(boot_data) > 0:
+                        port_info = f"{found_port} @ {baud} baud"
+
+                        # Check for protocol markers
+                        has_slip = SLIP_END in boot_data
+                        has_hdlc = HDLC_FLAG in boot_data
+
+                        if has_slip or has_hdlc:
+                            protocol = "deCONZ/SLIP" if has_slip else "EZSP/HDLC"
+                            return TestOutput(
+                                test_name,
+                                TestResult.PASS,
+                                f"RasBee II detected ({protocol})",
+                                f"{port_info} | Boot: {len(boot_data)} bytes"
+                            )
                         else:
-                            crc <<= 1
-                        crc &= 0xFFFF
-                return crc
+                            # Got data but no recognized protocol markers
+                            # Still consider it a pass - device is responding
+                            return TestOutput(
+                                test_name,
+                                TestResult.PASS,
+                                "RasBee II detected (unknown protocol)",
+                                f"{port_info} | Boot: {boot_data[:16].hex()}"
+                            )
 
-            crc = crc16(frame_data)
-            frame = bytes([SLIP_END]) + frame_data + bytes([crc & 0xFF, (crc >> 8) & 0xFF, SLIP_END])
+                    last_error = f"{found_port} @ {baud} | No boot data"
 
-            # Send the query
-            ser.write(frame)
-            ser.flush()
+                except serial.SerialException as e:
+                    last_error = f"{found_port}: {str(e)}"
+                except PermissionError:
+                    last_error = f"Permission denied on {found_port}"
+                except Exception as e:
+                    last_error = str(e)
 
-            self._emit_status(test_name, TestResult.RUNNING, "Waiting for response...")
-            sleep(0.5)
-
-            # Read response
-            response = ser.read(64)
-            ser.close()
-
-            port_info = f"{found_port} @ {working_baud} baud"
-
-            if len(response) > 0:
-                # Check for SLIP framing (starts/ends with 0xC0)
-                if response[0] == SLIP_END or SLIP_END in response:
-                    return TestOutput(
-                        test_name,
-                        TestResult.PASS,
-                        "RasBee II detected (deCONZ)",
-                        f"{port_info} | Response: {len(response)} bytes"
-                    )
-                else:
-                    return TestOutput(
-                        test_name,
-                        TestResult.PASS,
-                        "Device responded (unknown protocol)",
-                        f"{port_info} | Response: {response[:20].hex()}"
-                    )
-            else:
-                return TestOutput(
-                    test_name,
-                    TestResult.FAIL,
-                    "No response from RasBee II",
-                    f"{port_info} | No device detected on serial port"
-                )
+            # No data at any baud rate
+            return TestOutput(
+                test_name,
+                TestResult.FAIL,
+                "No RasBee II detected",
+                last_error or "No boot data received at any baud rate"
+            )
 
         except ImportError:
             return TestOutput(
@@ -954,13 +941,6 @@ class GPIOTester:
                 TestResult.FAIL,
                 "pyserial not installed",
                 "Run: pip3 install pyserial"
-            )
-        except PermissionError:
-            return TestOutput(
-                test_name,
-                TestResult.FAIL,
-                "Permission denied on serial port",
-                "May need sudo or dialout group membership"
             )
         except Exception as e:
             return TestOutput(test_name, TestResult.FAIL, f"RasBee test failed: {e}")
