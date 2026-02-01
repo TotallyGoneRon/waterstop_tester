@@ -536,9 +536,9 @@ class GPIOTester:
                 self.gpio.output(in1, self.gpio.LOW)
                 self.gpio.output(in2, self.gpio.HIGH)
 
-            # Start PWM
+            # Start PWM at 50% to avoid overshooting limit switches
             pwm = self.gpio.PWM(pwm_pin, 1000)
-            pwm.start(100)  # Full speed
+            pwm.start(50)
 
             # Run for duration
             sleep(duration)
@@ -607,7 +607,7 @@ class GPIOTester:
         except Exception as e:
             return TestOutput(test_name, TestResult.FAIL, f"Motor B test failed: {e}")
 
-    def _cycle_valve(self, motor: str, test_name: str, timeout: float = 10.0) -> Tuple[bool, str]:
+    def _cycle_valve(self, motor: str, test_name: str, timeout: float = 15.0) -> Tuple[bool, str]:
         """Fully cycle a valve open then closed.
 
         Args:
@@ -637,11 +637,11 @@ class GPIOTester:
             # Setup PWM
             pwm = self.gpio.PWM(pwm_pin, 1000)
 
-            # Open valve
+            # Open valve at 50% speed to avoid overshooting limit switch
             self._emit_status(test_name, TestResult.RUNNING, f"{name}: Opening valve...")
             self.gpio.output(in1, self.gpio.HIGH)
             self.gpio.output(in2, self.gpio.LOW)
-            pwm.start(100)
+            pwm.start(50)
 
             start = time.time()
             last_update = 0
@@ -667,11 +667,11 @@ class GPIOTester:
                 self._emit_status(test_name, TestResult.RUNNING, f"{name}: Open TIMEOUT, trying close...")
             sleep(0.3)
 
-            # Close valve
+            # Close valve at 50% speed to avoid overshooting limit switch
             self._emit_status(test_name, TestResult.RUNNING, f"{name}: Closing valve...")
             self.gpio.output(in1, self.gpio.LOW)
             self.gpio.output(in2, self.gpio.HIGH)
-            pwm.start(100)
+            pwm.start(50)
 
             start = time.time()
             last_update = 0
