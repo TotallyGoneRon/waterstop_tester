@@ -251,17 +251,18 @@ def handle_toggle_fan(data):
         try:
             from gpio_tests import GPIOTester, Pins
 
-            # Initialize or re-initialize tester
-            # (test runs may have called cleanup() which resets GPIO mode)
+            # Ensure GPIO is initialized (don't reset pins to preserve LED/fan state)
             if manual_control['gpio_tester'] is None:
                 manual_control['gpio_tester'] = GPIOTester()
 
             tester = manual_control['gpio_tester']
-            if not tester._initialized:
-                if not tester.setup():
-                    emit('error', {'message': 'Failed to initialize GPIO'})
-                    manual_control['gpio_tester'] = None
-                    return
+            if not tester.setup(reset_pins=False):
+                emit('error', {'message': 'Failed to initialize GPIO'})
+                manual_control['gpio_tester'] = None
+                return
+
+            # Setup only the fan pin
+            tester.gpio.setup(Pins.FAN_PWM, tester.gpio.OUT)
 
             if turn_on:
                 tester.turn_fan_on()
@@ -294,17 +295,18 @@ def handle_toggle_led(data):
         try:
             from gpio_tests import GPIOTester, Pins
 
-            # Initialize or re-initialize tester
-            # (test runs may have called cleanup() which resets GPIO mode)
+            # Ensure GPIO is initialized (don't reset pins to preserve LED/fan state)
             if manual_control['gpio_tester'] is None:
                 manual_control['gpio_tester'] = GPIOTester()
 
             tester = manual_control['gpio_tester']
-            if not tester._initialized:
-                if not tester.setup():
-                    emit('error', {'message': 'Failed to initialize GPIO'})
-                    manual_control['gpio_tester'] = None
-                    return
+            if not tester.setup(reset_pins=False):
+                emit('error', {'message': 'Failed to initialize GPIO'})
+                manual_control['gpio_tester'] = None
+                return
+
+            # Setup only the LED pin
+            tester.gpio.setup(Pins.LED, tester.gpio.OUT)
 
             if turn_on:
                 tester.turn_led_on()

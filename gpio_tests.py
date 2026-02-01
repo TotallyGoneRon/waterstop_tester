@@ -73,8 +73,13 @@ class GPIOTester:
             'details': details
         })
 
-    def setup(self) -> bool:
-        """Initialize GPIO. Returns True on success."""
+    def setup(self, reset_pins: bool = True) -> bool:
+        """Initialize GPIO. Returns True on success.
+
+        Args:
+            reset_pins: If True, reset all pins to default state.
+                       If False, only ensure GPIO mode is set.
+        """
         try:
             import RPi.GPIO as GPIO
             self.gpio = GPIO
@@ -83,22 +88,23 @@ class GPIOTester:
             GPIO.setmode(GPIO.BCM)
             GPIO.setwarnings(False)
 
-            # Setup outputs
-            output_pins = [
-                Pins.PWMA, Pins.PWMB, Pins.STBY,
-                Pins.AIN1, Pins.AIN2, Pins.BIN1, Pins.BIN2,
-                Pins.FAN_PWM, Pins.LED
-            ]
-            for pin in output_pins:
-                GPIO.setup(pin, GPIO.OUT, initial=GPIO.LOW)
+            if reset_pins:
+                # Setup outputs with initial LOW state
+                output_pins = [
+                    Pins.PWMA, Pins.PWMB, Pins.STBY,
+                    Pins.AIN1, Pins.AIN2, Pins.BIN1, Pins.BIN2,
+                    Pins.FAN_PWM, Pins.LED
+                ]
+                for pin in output_pins:
+                    GPIO.setup(pin, GPIO.OUT, initial=GPIO.LOW)
 
-            # Setup inputs with pull-up (feedback switches are normally open)
-            input_pins = [
-                Pins.COLD_FB_OPEN, Pins.COLD_FB_CLOSE,
-                Pins.HOT_FB_OPEN, Pins.HOT_FB_CLOSE
-            ]
-            for pin in input_pins:
-                GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+                # Setup inputs with pull-up (feedback switches are normally open)
+                input_pins = [
+                    Pins.COLD_FB_OPEN, Pins.COLD_FB_CLOSE,
+                    Pins.HOT_FB_OPEN, Pins.HOT_FB_CLOSE
+                ]
+                for pin in input_pins:
+                    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
             self._initialized = True
             return True
