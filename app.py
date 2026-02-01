@@ -251,15 +251,17 @@ def handle_toggle_fan(data):
         try:
             from gpio_tests import GPIOTester, Pins
 
-            # Initialize tester if needed
+            # Initialize or re-initialize tester
+            # (test runs may have called cleanup() which resets GPIO mode)
             if manual_control['gpio_tester'] is None:
                 manual_control['gpio_tester'] = GPIOTester()
-                if not manual_control['gpio_tester'].setup():
+
+            tester = manual_control['gpio_tester']
+            if not tester._initialized:
+                if not tester.setup():
                     emit('error', {'message': 'Failed to initialize GPIO'})
                     manual_control['gpio_tester'] = None
                     return
-
-            tester = manual_control['gpio_tester']
 
             if turn_on:
                 tester.turn_fan_on()
@@ -267,11 +269,6 @@ def handle_toggle_fan(data):
             else:
                 tester.turn_fan_off()
                 manual_control['fan_on'] = False
-
-                # Cleanup GPIO if both fan and LED are off (safe to swap HAT)
-                if not manual_control['fan_on'] and not manual_control['led_on']:
-                    tester.cleanup()
-                    manual_control['gpio_tester'] = None
 
             emit('fan_state', {'on': manual_control['fan_on']})
             socketio.emit('fan_state', {'on': manual_control['fan_on']})
@@ -297,15 +294,17 @@ def handle_toggle_led(data):
         try:
             from gpio_tests import GPIOTester, Pins
 
-            # Initialize tester if needed
+            # Initialize or re-initialize tester
+            # (test runs may have called cleanup() which resets GPIO mode)
             if manual_control['gpio_tester'] is None:
                 manual_control['gpio_tester'] = GPIOTester()
-                if not manual_control['gpio_tester'].setup():
+
+            tester = manual_control['gpio_tester']
+            if not tester._initialized:
+                if not tester.setup():
                     emit('error', {'message': 'Failed to initialize GPIO'})
                     manual_control['gpio_tester'] = None
                     return
-
-            tester = manual_control['gpio_tester']
 
             if turn_on:
                 tester.turn_led_on()
@@ -313,11 +312,6 @@ def handle_toggle_led(data):
             else:
                 tester.turn_led_off()
                 manual_control['led_on'] = False
-
-                # Cleanup GPIO if both fan and LED are off (safe to swap HAT)
-                if not manual_control['fan_on'] and not manual_control['led_on']:
-                    tester.cleanup()
-                    manual_control['gpio_tester'] = None
 
             emit('led_state', {'on': manual_control['led_on']})
             socketio.emit('led_state', {'on': manual_control['led_on']})

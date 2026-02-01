@@ -141,6 +141,7 @@ class GPIOTester:
             raise RuntimeError("GPIO not initialized")
 
         if self.pwm_fan:
+            self.pwm_fan.ChangeDutyCycle(0)  # Set to 0% first
             self.pwm_fan.stop()
             self.pwm_fan = None
 
