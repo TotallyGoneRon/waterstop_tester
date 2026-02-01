@@ -302,34 +302,57 @@ class GPIOTester:
             return TestOutput(test_name, TestResult.FAIL, f"PWM B test failed: {e}")
 
     def test_pullup_resistors(self) -> TestOutput:
-        """Test pull-up resistors (no valves connected).
+        """Test pull-up resistors on the HAT (no valves connected).
 
-        All feedback pins should read HIGH when no valves are connected.
+        Enables Pi's internal pull-DOWN resistors to fight against HAT's pull-ups.
+        If HAT pull-ups exist (typically 10k or less), they will overpower Pi's
+        weak internal pull-downs (~50k) and pins will read HIGH.
+        Without HAT, pins will read LOW due to Pi's pull-downs.
         """
         test_name = "Pull-up Resistors"
         try:
-            self._emit_status(test_name, TestResult.RUNNING, "Checking pull-up resistors...")
+            self._emit_status(test_name, TestResult.RUNNING, "Checking HAT pull-up resistors...")
 
-            cold_open = self.gpio.input(Pins.COLD_FB_OPEN)
-            cold_close = self.gpio.input(Pins.COLD_FB_CLOSE)
-            hot_open = self.gpio.input(Pins.HOT_FB_OPEN)
-            hot_close = self.gpio.input(Pins.HOT_FB_CLOSE)
+            feedback_pins = [
+                (Pins.COLD_FB_OPEN, 'Cold Open'),
+                (Pins.COLD_FB_CLOSE, 'Cold Close'),
+                (Pins.HOT_FB_OPEN, 'Hot Open'),
+                (Pins.HOT_FB_CLOSE, 'Hot Close')
+            ]
 
-            pins_state = {
-                'Cold Open': cold_open,
-                'Cold Close': cold_close,
-                'Hot Open': hot_open,
-                'Hot Close': hot_close
-            }
+            # Enable Pi's internal pull-DOWNS to test for HAT's external pull-ups
+            # HAT pull-ups (~10k) will overpower Pi's weak pull-downs (~50k)
+            for pin, _ in feedback_pins:
+                self.gpio.setup(pin, self.gpio.IN, pull_up_down=self.gpio.PUD_DOWN)
+
+            # Delay for pins to settle
+            sleep(0.1)
+
+            # Read pin states (should be HIGH if HAT pull-ups present and stronger)
+            pins_state = {}
+            for pin, name in feedback_pins:
+                pins_state[name] = self.gpio.input(pin)
+
+            # Re-enable Pi's internal pull-ups for normal operation
+            for pin, _ in feedback_pins:
+                self.gpio.setup(pin, self.gpio.IN, pull_up_down=self.gpio.PUD_UP)
 
             all_high = all(v == 1 for v in pins_state.values())
+            all_low = all(v == 0 for v in pins_state.values())
             details = " | ".join([f"{k}: {'HIGH' if v == 1 else 'LOW'}" for k, v in pins_state.items()])
 
             if all_high:
                 return TestOutput(
                     test_name,
                     TestResult.PASS,
-                    "All pull-ups working (all pins HIGH)",
+                    "HAT pull-ups detected (all pins HIGH)",
+                    details
+                )
+            elif all_low:
+                return TestOutput(
+                    test_name,
+                    TestResult.FAIL,
+                    "No HAT detected (all pins LOW)",
                     details
                 )
             else:
@@ -337,7 +360,7 @@ class GPIOTester:
                 return TestOutput(
                     test_name,
                     TestResult.FAIL,
-                    f"Unexpected LOW: {', '.join(low_pins)}",
+                    f"Missing pull-ups: {', '.join(low_pins)}",
                     details
                 )
 
