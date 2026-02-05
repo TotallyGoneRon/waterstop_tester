@@ -238,6 +238,12 @@ if [ -f "$LIGHTDM_CONF" ]; then
     fi
 fi
 
+# Ensure autologin group exists and user is in it
+# LightDM PAM requires this group for passwordless login
+groupadd -f autologin 2>/dev/null || true
+usermod -aG autologin "$REAL_USER" 2>/dev/null || true
+echo "Autologin group configured for $REAL_USER."
+
 # Ensure graphical boot target
 systemctl set-default graphical.target 2>/dev/null || true
 
