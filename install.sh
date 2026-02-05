@@ -244,6 +244,15 @@ groupadd -f autologin 2>/dev/null || true
 usermod -aG autologin "$REAL_USER" 2>/dev/null || true
 echo "Autologin group configured for $REAL_USER."
 
+# Ensure LightDM uses a valid session (rpd-labwc may be missing)
+if [ -f "$LIGHTDM_CONF" ]; then
+    if ! [ -f /usr/share/wayland-sessions/rpd-labwc.desktop ]; then
+        sed -i 's/user-session=rpd-labwc/user-session=labwc/' "$LIGHTDM_CONF"
+        sed -i 's/autologin-session=rpd-labwc/autologin-session=labwc/' "$LIGHTDM_CONF"
+        echo "Switched LightDM session to labwc (rpd-labwc not available)."
+    fi
+fi
+
 # Ensure graphical boot target
 systemctl set-default graphical.target 2>/dev/null || true
 
