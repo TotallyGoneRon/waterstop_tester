@@ -21,6 +21,8 @@ sleep 1
 # --ozone-platform=wayland is required for LabWC (Wayland compositor)
 exec chromium \
     --ozone-platform=wayland \
+    --disable-gpu \
+    --password-store=basic \
     --kiosk \
     --noerrdialogs \
     --disable-infobars \

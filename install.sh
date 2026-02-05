@@ -172,7 +172,23 @@ else
 fi
 
 # ----------------------------------------
-# 6. Kiosk Mode Setup
+# 6. Remove GNOME Keyring (blocks kiosk with password prompts)
+# ----------------------------------------
+echo
+echo "Removing GNOME Keyring (prevents password prompts in kiosk)..."
+apt-get remove -y gnome-keyring libpam-gnome-keyring 2>/dev/null || true
+# Remove any existing keyring data
+rm -rf "$REAL_HOME/.local/share/keyrings" 2>/dev/null || true
+# Disable the XDG autostart entries if they still exist
+for f in /etc/xdg/autostart/gnome-keyring-*.desktop; do
+    if [ -f "$f" ]; then
+        echo "Hidden=true" >> "$f" 2>/dev/null || true
+    fi
+done
+echo "GNOME Keyring removed."
+
+# ----------------------------------------
+# 7. Kiosk Mode Setup
 # ----------------------------------------
 echo
 echo "Setting up kiosk mode..."
