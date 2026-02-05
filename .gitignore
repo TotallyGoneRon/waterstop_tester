@@ -13,3 +13,4 @@ node_modules/
 package*.json
 *.png
 *.js
+!static/socket.io.min.js
