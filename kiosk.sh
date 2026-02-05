@@ -18,7 +18,9 @@ done
 sleep 1
 
 # Launch Chromium in kiosk mode
+# --ozone-platform=wayland is required for LabWC (Wayland compositor)
 exec chromium \
+    --ozone-platform=wayland \
     --kiosk \
     --noerrdialogs \
     --disable-infobars \
